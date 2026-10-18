@@ -1,38 +1,100 @@
-# Global Mars MOLA DEM (Preliminary Work)
+# Global Mars MOLA DEM
 
-This repository contains scripts and preliminary results for constructing a
-global Mars Digital Elevation Model (DEM) from Mars Orbiter Laser Altimeter (MOLA)
-Mission Experiment Gridded Data Record (MEGDR) products.
+This repository contains one script, `build_mola_dem.py`, that mosaics four
+NASA PDS MOLA MEGDR topography tiles into a global GeoTIFF. It does not
+download the tiles, and the GeoTIFF is not stored here. There is no test
+suite and no magnetic-field or MAVEN analysis.
 
-## Scientific Motivation
-Mars lacks a global intrinsic magnetic field, making local topography an
-important control on atmospheric column depth and surface radiation exposure.
-This DEM provides the topographic reference frame for subsequent analysis of
-crustal magnetic field topology and energetic particle access using MAVEN data.
+## Data
 
-## Data Sources
-- MOLA MEGDR 463 m global tiles:
-  - megt90n000gb
-  - megt90n180gb
-  - megt00n000gb
-  - megt00n180gb
-NASA PDS Geosciences Node
+The script reads these four PDS3 topography labels, plus the `.img` file named
+by each label:
 
-## Method
-- PDS label ingestion to preserve scaling and geolocation
-- Application of standard half-pixel offset correction
-- Global mosaicking using GDAL
-- Conversion to physical elevation units (meters relative to the Mars areoid)
+- `megt90n000gb` — 90°N to 0°, 0°E to 180°E
+- `megt90n180gb` — 90°N to 0°, 180°E to 360°E
+- `megt00n000gb` — 0° to 90°S, 0°E to 180°E
+- `megt00n180gb` — 0° to 90°S, 180°E to 360°E
 
-## Output
-The script produces:
-- A virtual global mosaic (`mars_mola_global.vrt`)
-- A materialised GeoTIFF DEM (`mars_mola_global_463m.tif`)
+They are the 64 pixel/degree MEGDR topography tiles (filename resolution
+letter `G`). The PDS label gives `MAP_SCALE = 0.926 <KM/PIXEL>`. They are not
+the 128 pixel/degree products, whose map scale is about 463 m/pixel and whose
+names use resolution letter `H`.
 
-The full GeoTIFF is not included due to size; users can reproduce it locally.
+Dataset: `MGS-M-MOLA-5-MEGDR-L3-V1.0`, NASA PDS Geosciences Node.
 
-## Requirements
-See `requirements.txt`.
+- Product page: https://pds-geosciences.wustl.edu/missions/mgs/megdr.html
+- PDS3 64 pixel/degree directory: https://pds-geosciences.wustl.edu/mgs/mgs-m-mola-5-megdr-l3-v1/mgsl_300x/meg064/
+
+The node’s product page now also points at a PDS4 bundle. This script opens
+the PDS3 `.lbl` files with GDAL’s PDS driver.
+
+## What the script does
+
+1. Sets `PDS_SampleProjOffset_Shift` and `PDS_LineProjOffset_Shift` to `-0.5`
+   before opening the labels. That is GDAL’s documented correction for the
+   one-pixel offset in MOLA MEGDR labels
+   (https://gdal.org/en/stable/drivers/raster/pds.html).
+2. Builds `mars_mola_global.vrt` with `gdal.BuildVRT`. `resampleAlg` is
+   `cubic`, which applies only if a source has to be resampled. These tiles
+   are the same resolution.
+3. Leaves the coordinate system that the PDS driver reads from the label: a
+   Mars simple-cylindrical projection on a sphere of radius 3396 km, central
+   meridian 180°, coordinates in metres. It does not assign EPSG:4326.
+4. Writes `mars_mola_global_64ppd.tif` with `gdal.Translate`
+   (`COMPRESS=DEFLATE`, `PREDICTOR=2`, `ZLEVEL=9`, `TILED=YES`,
+   `BIGTIFF=YES`, `unscale=True`). The topography samples are already signed
+   16-bit metres (`UNIT = METER`, scale 1, offset 0). With GDAL 3.8.4,
+   `unscale=True` does not change them to Float32.
+5. Runs `gdaladdo -ro` to add external overviews at levels 2, 4, 8, 16, 32,
+   and 64. If `gdaladdo` is missing or fails, the script stops with an error
+   after the GeoTIFF has been written. The overview file is
+   `mars_mola_global_64ppd.tif.ovr`.
+
+`*.tif`, `*.vrt`, and `*.ovr` are listed in `.gitignore`.
+
+## Install
+
+The script imports `osgeo` and runs the `gdaladdo` executable. On Ubuntu
+24.04:
+
+```bash
+sudo apt-get install gdal-bin python3-gdal
+python3 -c "from osgeo import gdal; print(gdal.__version__)"
+```
+
+That installed GDAL 3.8.4 here, including the PDS driver. Use `python3`. A
+bare `python` command is not provided by that package.
+
+Do not install this project with `pip install -r requirements.txt`. There is
+no `requirements.txt`. The PyPI `gdal` package builds from source and fails
+without a matching GDAL development install (`gdal-config` was not found).
+NumPy is not used.
+
+## Run
+
+Put the four `.lbl` files and their `.img` files in one directory. The script
+looks up the lowercase label names above. From that directory:
+
+```bash
+python3 build_mola_dem.py
+```
+
+`directory` at the top of the script defaults to the current working
+directory. Set it to another folder if the tiles live somewhere else.
+
+Without those files the script raises `FileNotFoundError` and does not write
+an output.
+
+## Figure
+
+`mars_global_topography.jpg` is a 630×316 JPEG already in the repository. The
+script does not create it. The file has no caption, scale bar, color bar, or
+grid, and it is not a measured output of the mosaic.
+
+## Licence
+
+This repository does not include a licence.
 
 ## Author
+
 Andrew Allan
