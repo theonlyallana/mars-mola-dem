@@ -105,15 +105,16 @@ Set `directory` if the tiles should be read from somewhere other than the
 current directory. Without the labels, the script raises `FileNotFoundError`
 and does not write an output.
 
-## Figure
+## Preview image
 
-`mars_global_topography.jpg` is a 630×316 JPEG already in the repository. The
-script does not create it. The file has no caption, scale bar, color bar, or
-grid, and it is not a measured output of the mosaic.
+`mars_global_topography.jpg` is a 630×316 preview image stored in the
+repository. `build_mola_dem.py` does not produce it. It has no caption, scale
+bar, color bar, or grid, and it is not a measured output of the mosaic.
 
 ## Licence
 
-This repository does not include a licence.
+This project is released under the MIT License. The copyright holder is
+Andrew Allan (2026). See [LICENSE](LICENSE).
 
 ## Author
 
